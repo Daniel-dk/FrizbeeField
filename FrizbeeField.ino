@@ -21,7 +21,7 @@
 #define LED_TYPE    WS2812B //WS2811_400
 #define COLOR_ORDER GRB
 
-#define MAX_IDLE_STATES 5
+#define MAX_IDLE_STATES 6
 #define MAX_IDLE_STATE_IDX MAX_IDLE_STATES-1
 #define LEFT_GOAL_STATE MAX_IDLE_STATE_IDX+1
 #define RIGHT_GOAL_STATE LEFT_GOAL_STATE+1
@@ -35,9 +35,6 @@ CRGB borderLeft[NUMLEDBORDER]; // the long ( 75 m ) piece that goes around the  
 CRGB goalLeft[NUMLEDSGOAL]; // shorter ( 20 m ) Goal line on left side
 CRGB borderRight[NUMLEDBORDER];
 CRGB goalRight[NUMLEDSGOAL];
-
-
-
 
 
 void setup()
@@ -54,7 +51,7 @@ void setup()
 	Serial.begin(115200);
 	halfGradient(true, CHSV(0, 200, 255), CHSV(120, 200, 255)); // left : red to green
 }
-
+uint8_t hueL, hueC, hueR;
 void loop()
 {
 	/* add main program code here */
@@ -91,12 +88,16 @@ void loop()
 			fill_solid(borderRight, LONGLED, CHSV(gHue, 0, 255));
 			fillGoalbox(RIGHTSIDE, CHSV(gHue+128, 255, 255));
 			break;
-		case 4:  // white field, coloured goal boxes
-			fill_solid(borderLeft, NUMLEDBORDER, CHSV(gHue, 0, 255));
-			fillGoalbox(LEFTSIDE, CHSV(gHue, 255, 255));
+		case 4:  // invisible bouncy ball " shadows of a bouncy ball"
+			pongBounce();
+			break;
 
-			fill_solid(borderRight, LONGLED, CHSV(gHue, 0, 255));
-			fillGoalbox(RIGHTSIDE, CHSV(gHue + 128, 255, 255));
+		case 5:  // one wave over the whole field
+			hueC = gHue;
+			hueL = gHue - 100;
+			hueR =  gHue + 100;
+			halfGradient(LEFTSIDE, CHSV(hueC, 200, sin8(gHue)), CHSV(hueL, 200, 255)); // left
+			halfGradient(RIGHTSIDE, CHSV(hueC, 200, sin8(gHue)), CHSV(hueR, 200, 255)); // right
 			break;
 
 		case LEFT_GOAL_STATE: // LEFT GOAL scored
@@ -117,17 +118,19 @@ void loop()
 		char c = Serial.read();
 		switch (c)
 		{
-		case '1' : // cycle overall mode
+		case '0' : // cycle overall mode
 			fieldState++;
-			if (fieldState>= LEFT_GOAL_STATE)
+			if (fieldState >= LEFT_GOAL_STATE)
 			{
 				fieldState = 0;
 			}
+			Serial.print("State: ");
+			Serial.println(fieldState);
 			break;
-		case '2': // LEFT goal animation
+		case '1': // LEFT goal animation
 			fieldState = LEFT_GOAL_STATE;
 			break;
-		case 's': // Right Goal animation
+		case '2': // Right Goal animation
 			fieldState = RIGHT_GOAL_STATE;
 			break;
 		default:
@@ -139,7 +142,179 @@ void loop()
 	FastLED.delay(1000 / FPS);
 }
 
-/*Fill half the field with a gradient*/
+
+/* shadows of a bouncy ball*/
+void pongBounce() {
+	
+	static uint8_t  ball[2]; // holds the ball X and Y position
+	// x == 0 -> LONGLED*2
+	// y == 0 -> SHORTLED
+
+	static uint8_t workingArray[LONGLED * 2];
+	int ballSpeed = 10;
+	double thetaFrac;
+	int deltaMid;
+	double theta;
+
+	double attenuation[2];
+	// [0] is the normalised distance from the line ( 0.00 == near, 1.00 == far )
+	// [1] is the inverse of that (1.00 == near, 0.00 == far )
+
+
+	// move the ball
+	if (millis() % ballSpeed < 2) {
+		moveBall(ball);
+		// "project" ball position on edges
+		// (0) calculate ball position
+			// (1) draw a sine wave on our "side"
+			// (2) shift the wave so the crest is where the ball is
+			// (3) attenuate the wave according to teh distance of betwene the ball and the side we are drawng
+
+		// first we do the long sides
+		thetaFrac = 128 / (double)(LONGLED * 2); // fraction we add every pixel ( from 0 - 180 degrees  - 0-127 in 8 bit units)
+		 theta = 0;
+		//(1) draw a sine wave on our "side"
+		for (int i = 0; i < (LONGLED * 2); i++)
+		{
+			workingArray[i] = (sin8((uint8_t)theta) -128)*2;
+			theta += thetaFrac;
+			// print the array to look
+			//Serial.print(workingArray[i]);
+			//Serial.print(", ");
+		}
+	//	Serial.println();
+	//	delay(500);
+		// (2) shift the wave so the crest is where the ball is
+		// X is long direction
+		// Y is short direction
+		deltaMid = ball[0] - LONGLED;
+		// if deltaMid is >0 shift Right >>>
+		if (deltaMid >= 0)
+		{
+			// shift "deltaMid" pixels
+			//shift right deltaMid times
+			for (int shiftcount = 0; shiftcount < abs(deltaMid); shiftcount++)
+			{
+				for (int i = (LONGLED * 2) - 1; i > 0; i--) {
+					workingArray[i] = workingArray[i - 1];
+				}
+				workingArray[0] = 0;
+			}
+		}
+
+		else { 		// if deltaMid is < 0 , shift Left <<<
+			//shift left deltaMid times
+			for (int shiftcount = 0; shiftcount < abs(deltaMid); shiftcount++)
+			{
+				for (int i = 0; i < (LONGLED * 2) - 1; i++) {
+					workingArray[i] = workingArray[i + 1];
+				}
+				workingArray[(LONGLED * 2) - 1] = 0;
+			}
+		}
+		// (3) calculate attenuation based on the other direction
+		attenuation[0] = ball[1] / (double)SHORTLED; // 0 - 1 scale of distance of ball to Y-zero
+		attenuation[0] = constrain(attenuation[0], 0, 1.00);
+		attenuation[1] = 1.0 - attenuation[0]; // flip the effect 9 so that 1 means close, 0 means far )
+		// apply to the long sides
+		// (0,0) long  side first ( attenuation[1] ) 
+		// (0,Y_MAX) thereafter ( attenuation[0] ) 
+
+		// inject right [0 -> LONGLED] : workingArray[LONGLED -> (LONGLED * 2)]
+		uint8_t attenuatedVal;
+		for (int i = 0; i < LONGLED; i++)
+		{
+			attenuatedVal = workingArray[LONGLED + i] * attenuation[1];
+			borderRight[i] = CHSV(gHue, 255, attenuatedVal);
+			// far right
+			borderRight[(LONGLED + SHORTLED + LONGLED - 1) - i] = CHSV(gHue, 255, attenuatedVal);
+		}
+		// inject left : left[0 -> LONGLED] : flipped ( workingArray[0 : LONGLED] )
+		for (int i = 0; i < LONGLED; i++) 
+		{
+			 attenuatedVal = workingArray[LONGLED - i] * attenuation[1];
+			 // close left
+			borderLeft[i] = CHSV(gHue, 255, attenuatedVal);
+			//far long left
+			borderLeft[(LONGLED + SHORTLED + LONGLED - 1) - i] = CHSV(gHue, 255, attenuatedVal);
+		}
+
+
+		// ******************* endfield lines *********************** 
+		thetaFrac = 128 / (double)(SHORTLED); // fraction we add every pixel ( from 0 - 180 degrees  - 0-127 in 8 bit units)
+		theta = 0;
+		for (int i = 0; i < sizeof(workingArray); i++)
+		{
+			workingArray[i] = 0;
+		}
+		//(1) draw a sine wave on our "side"
+		for (int i = 0; i < SHORTLED; i++)
+		{
+			workingArray[i] = (sin8((uint8_t)theta) - 128) * 2;
+			theta += thetaFrac;
+		}
+		deltaMid = ball[1] - (SHORTLED/2);
+		// if deltaMid is >0 shift Right >>>
+		if (deltaMid >= 0)
+		{
+			// shift "deltaMid" pixels
+			//shift right deltaMid times
+			for (int shiftcount = 0; shiftcount < abs(deltaMid); shiftcount++)
+			{
+				for (int i = SHORTLED - 1; i > 0; i--) {
+					workingArray[i] = workingArray[i - 1];
+				}
+				workingArray[0] = 0;
+			}
+		}
+
+		else { 		// if deltaMid is < 0 , shift Left <<<
+					//shift left deltaMid times
+			for (int shiftcount = 0; shiftcount < abs(deltaMid); shiftcount++)
+			{
+				for (int i = 0; i < SHORTLED - 1; i++) {
+					workingArray[i] = workingArray[i + 1];
+				}
+				workingArray[SHORTLED - 1] = 0;
+			}
+		}
+		// (3) calculate attenuation based on the other direction
+		attenuation[0] = ball[0] / (double)(LONGLED*2); // 0 - 1 scale of distance of ball to X-zero
+		attenuation[0] = constrain(attenuation[0], 0, 1.00);
+		attenuation[1] = 1.0 - attenuation[0]; // flip the effect ( so that 1 means close, 0 means far )
+		// left  endfield	
+		for (int i = 0; i < SHORTLED; i++)
+		{
+			attenuatedVal = workingArray[i] * attenuation[1];
+			borderLeft[LONGLED + i] = CHSV(gHue, 255, attenuatedVal);
+		}
+		// right  endfield	
+		for (int i = 0; i < SHORTLED; i++)
+		{
+			attenuatedVal = workingArray[i] * attenuation[0];
+			borderLeft[i] = CHSV(gHue, 255, attenuatedVal);
+		}
+
+	}
+}
+
+void moveBall(uint8_t ball[]) {
+	static int ballDirectionX = 1;
+	static int ballDirectionY = 1;
+
+	if (ball[0] > LONGLED || ball[0] < 0) {
+		ballDirectionX = -ballDirectionX;
+	}
+	if (ball[1] > SHORTLED|| ball[1] < 0) {
+		ballDirectionY = -ballDirectionY;
+	}
+
+	ball[0] += ballDirectionX;
+	ball[1] += ballDirectionY;
+}
+
+
+/*Fill half the field with a gradient centre toward the endfield*/
 void halfGradient(boolean side, CHSV startCol, CHSV endCol ) {
 	if (side) // LEFT
 	{
