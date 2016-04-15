@@ -18,10 +18,10 @@
 #define DATA_PIN_3   A2
 #define DATA_PIN_4   A3
 
-#define LED_TYPE    WS2811_400
+#define LED_TYPE    WS2812B //WS2811_400
 #define COLOR_ORDER GRB
 
-#define MAX_IDLE_STATES 4
+#define MAX_IDLE_STATES 5
 #define MAX_IDLE_STATE_IDX MAX_IDLE_STATES-1
 #define LEFT_GOAL_STATE MAX_IDLE_STATE_IDX+1
 #define RIGHT_GOAL_STATE LEFT_GOAL_STATE+1
@@ -90,15 +90,20 @@ void loop()
 
 			fill_solid(borderRight, LONGLED, CHSV(gHue, 0, 255));
 			fillGoalbox(RIGHTSIDE, CHSV(gHue+128, 255, 255));
+			break;
+		case 4:  // white field, coloured goal boxes
+			fill_solid(borderLeft, NUMLEDBORDER, CHSV(gHue, 0, 255));
+			fillGoalbox(LEFTSIDE, CHSV(gHue, 255, 255));
 
-
+			fill_solid(borderRight, LONGLED, CHSV(gHue, 0, 255));
+			fillGoalbox(RIGHTSIDE, CHSV(gHue + 128, 255, 255));
 			break;
 
-		case LEFT_GOAL_STATE: // LEFT GOAL
+		case LEFT_GOAL_STATE: // LEFT GOAL scored
 			sparkleGoalbox(LEFTSIDE);
 			EVERY_N_SECONDS(10) { fieldState = 0; }//  sparkle for 10 seconds
 			break;
-		case RIGHT_GOAL_STATE: // RIGHT GOAL
+		case RIGHT_GOAL_STATE: // RIGHT GOAL scored
 			sparkleGoalbox(RIGHTSIDE);
 			EVERY_N_SECONDS(10) { fieldState = 0; } //  sparkle for 10 seconds
 			break;
@@ -112,24 +117,18 @@ void loop()
 		char c = Serial.read();
 		switch (c)
 		{
-		case '1' : //test "halfgradient"
-			halfGradient(LEFTSIDE, CHSV(random8(),200, random8()), CHSV(random8(), random8(), random8())); // left
-			break;
-		case '2': // test "fill goalbox"
-			fillGoalbox(LEFTSIDE, CHSV(random8(), 200, 255));
-			break;
-		case '3': // test sparkle
-
-			for (int i = 0; i < 200; i++)
-			{
-				sparkleGoalbox(LEFTSIDE);
-				FastLED.show();
-				FastLED.delay(1000 / 500);
-			}
-			
-			break;
-		case 's': // increment the field state 
+		case '1' : // cycle overall mode
 			fieldState++;
+			if (fieldState>= LEFT_GOAL_STATE)
+			{
+				fieldState = 0;
+			}
+			break;
+		case '2': // LEFT goal animation
+			fieldState = LEFT_GOAL_STATE;
+			break;
+		case 's': // Right Goal animation
+			fieldState = RIGHT_GOAL_STATE;
 			break;
 		default:
 			break;
