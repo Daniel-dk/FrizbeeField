@@ -1,13 +1,14 @@
 #include "FastLED.h"
 
-#define LONGLED 60
-#define SHORTLED 30
+#define LONGLED 60 // Half number of LEDs on the long side of the field 
+#define SHORTLED 30 // number of LEDs in the width of the field ( goal line length )
 
-#define NUMLEDBORDER (LONGLED+SHORTLED+LONGLED) // number of LEDs per side 
-#define NUMLEDSGOAL (SHORTLED)
-#define GOALBOXLEN 5
-#define GOALPOS  (LONGLED-GOALBOXLEN)
-#define FPS 100
+#define NUMLEDBORDER (LONGLED+SHORTLED+LONGLED) // number of LEDs on the really long LED strips ( the ~75m ones )
+#define NUMLEDSGOAL (SHORTLED) // number of LEDs on the short strips ( like the 20m goal line )
+#define GOALBOXLEN 5  // how long the "goalbox" is
+
+#define GOALPOS  (LONGLED-GOALBOXLEN) // LED number on teh long strip where the Goal Line is
+#define FPS 100 // framerate
 
 #define LEFTSIDE true
 #define RIGHTSIDE false 
@@ -17,7 +18,7 @@
 #define DATA_PIN_3   A2
 #define DATA_PIN_4   A3
 
-#define LED_TYPE    WS2812B // WS2811_400
+#define LED_TYPE    WS2811_400
 #define COLOR_ORDER GRB
 
 #define MAX_IDLE_STATES 4
@@ -27,13 +28,13 @@
 #define MAX_STATE RIGHT_GOAL_STATE
 
 uint8_t fieldState = 0;
-uint8_t gHue = 0;
+uint8_t gHue = 0; // global hue that the field cycles through
 
-CRGB borderLeft[NUMLEDBORDER];
-CRGB goalLeft[NUMLEDSGOAL];
-
-//CRGB borderRight[NUMLEDBORDER];
-//CRGB goalRight[NUMLEDSGOAL];
+// LED arrays
+CRGB borderLeft[NUMLEDBORDER]; // the long ( 75 m ) piece that goes around the  left side
+CRGB goalLeft[NUMLEDSGOAL]; // shorter ( 20 m ) Goal line on left side
+CRGB borderRight[NUMLEDBORDER];
+CRGB goalRight[NUMLEDSGOAL];
 
 
 
@@ -44,8 +45,8 @@ void setup()
 	FastLED.addLeds<LED_TYPE, DATA_PIN_1, COLOR_ORDER>(borderLeft, NUMLEDBORDER).setCorrection(TypicalLEDStrip); // long left
 	FastLED.addLeds<LED_TYPE, DATA_PIN_2, COLOR_ORDER>(goalLeft, NUMLEDSGOAL).setCorrection(TypicalLEDStrip); //goal line left
 
-//	FastLED.addLeds<LED_TYPE, DATA_PIN_3, COLOR_ORDER>(borderRight, NUMLEDBORDER).setCorrection(TypicalLEDStrip); // long right
-//	FastLED.addLeds<LED_TYPE, DATA_PIN_4, COLOR_ORDER>(goalRight, NUMLEDSGOAL).setCorrection(TypicalLEDStrip); // goal line right
+	FastLED.addLeds<LED_TYPE, DATA_PIN_3, COLOR_ORDER>(borderRight, NUMLEDBORDER).setCorrection(TypicalLEDStrip); // long right
+	FastLED.addLeds<LED_TYPE, DATA_PIN_4, COLOR_ORDER>(goalRight, NUMLEDSGOAL).setCorrection(TypicalLEDStrip); // goal line right
 
 // set master brightness control
 	FastLED.setBrightness(32);
@@ -65,7 +66,7 @@ void loop()
 			halfGradient(LEFTSIDE, CHSV(gHue, 50, 255), CHSV(gHue + 50, 200, 255)); // left
 			halfGradient(RIGHTSIDE, CHSV(gHue, 50, 255), CHSV(gHue + 50, 200, 255)); // right
 			break;
-		case 1: // "bouncy ball things"
+		case 1: // "bouncy ball things" going up and down each side
 			heterodyne(LEFTSIDE);
 			heterodyne(RIGHTSIDE);
 			break;
@@ -77,47 +78,47 @@ void loop()
 			borderLeft[random16(NUMLEDBORDER)] += CHSV(gHue + random8(64), 200, 255);
 			goalLeft[random16(NUMLEDSGOAL)] += CHSV(gHue + random8(64), 200, 255);
 
-//			fadeToBlackBy(borderRight, NUMLEDBORDER, 10);
-//			fadeToBlackBy(goalRight, NUMLEDSGOAL, 10);
-//  		borderRight[random16(NUMLEDBORDER)] += CHSV(gHue + random8(64), 200, 255);
-//			goalRight[random16(NUMLEDSGOAL)] += CHSV(gHue + random8(64), 200, 255);
+			fadeToBlackBy(borderRight, NUMLEDBORDER, 10);
+			fadeToBlackBy(goalRight, NUMLEDSGOAL, 10);
+ 		    borderRight[random16(NUMLEDBORDER)] += CHSV(gHue + random8(64), 200, 255);
+			goalRight[random16(NUMLEDSGOAL)] += CHSV(gHue + random8(64), 200, 255);
 
 			break;
 		case 3 :  // white field, coloured goal boxes
 			fill_solid(borderLeft, NUMLEDBORDER, CHSV(gHue, 0, 255));
 			fillGoalbox(LEFTSIDE, CHSV(gHue,255,255));
 
-//			fill_solid(borderRight, LONGLED, CHSV(gHue, 0, 255));
-//			fillGoalbox(RIGHTSIDE, CHSV(gHue+128, 255, 255));
+			fill_solid(borderRight, LONGLED, CHSV(gHue, 0, 255));
+			fillGoalbox(RIGHTSIDE, CHSV(gHue+128, 255, 255));
 
 
 			break;
 
 		case LEFT_GOAL_STATE: // LEFT GOAL
 			sparkleGoalbox(LEFTSIDE);
-			EVERY_N_SECONDS(10) { fieldState = 0; }// only sparkle for 10 seconds
+			EVERY_N_SECONDS(10) { fieldState = 0; }//  sparkle for 10 seconds
 			break;
 		case RIGHT_GOAL_STATE: // RIGHT GOAL
 			sparkleGoalbox(RIGHTSIDE);
-			EVERY_N_SECONDS(10) { fieldState = 0; } // only sparkle for 10 seconds
+			EVERY_N_SECONDS(10) { fieldState = 0; } //  sparkle for 10 seconds
 			break;
 		default:
 			fieldState = 0;
 			break;
 		}
-
+	// some serial control to change modes
 	if (Serial.available()>0)
 	{
 		char c = Serial.read();
 		switch (c)
 		{
-		case '1' :
+		case '1' : //test "halfgradient"
 			halfGradient(LEFTSIDE, CHSV(random8(),200, random8()), CHSV(random8(), random8(), random8())); // left
 			break;
-		case '2':
+		case '2': // test "fill goalbox"
 			fillGoalbox(LEFTSIDE, CHSV(random8(), 200, 255));
 			break;
-		case '3':
+		case '3': // test sparkle
 
 			for (int i = 0; i < 200; i++)
 			{
@@ -127,15 +128,13 @@ void loop()
 			}
 			
 			break;
-		case 's':
+		case 's': // increment the field state 
 			fieldState++;
 			break;
 		default:
 			break;
 		}
 	}
-
-
 
 	FastLED.show();
 	FastLED.delay(1000 / FPS);
@@ -152,10 +151,10 @@ void halfGradient(boolean side, CHSV startCol, CHSV endCol ) {
 	}
 	else // RIGHT
 	{
-		/*fill_gradient(borderRight, LONGLED, startCol, endCol);
+		fill_gradient(borderRight, LONGLED, startCol, endCol);
 		fill_gradient(borderRight + LONGLED + SHORTLED, LONGLED, endCol, startCol);
 		fill_solid(borderRight + LONGLED, SHORTLED, endCol);
-		fill_solid(goalRight, SHORTLED, CRGB(borderRight[GOALPOS]));*/
+		fill_solid(goalRight, SHORTLED, CRGB(borderRight[GOALPOS]));
 	}
 
 }
@@ -172,10 +171,10 @@ void fillGoalbox(boolean side, CHSV goalCol) {
 	}
 	else // RIGHT
 	{
-		/*fill_solid(goalRight, SHORTLED, goalCol); // |
+		fill_solid(goalRight, SHORTLED, goalCol); // |
 		fill_solid(borderRight+ GOALPOS,GOALBOXLEN , goalCol); //
 		fill_solid(borderRight + LONGLED, SHORTLED, goalCol);
-		fill_solid(borderRight + LONGLED+ SHORTLED, GOALBOXLEN, goalCol);*/
+		fill_solid(borderRight + LONGLED+ SHORTLED, GOALBOXLEN, goalCol);
 	}
 }
 
@@ -194,10 +193,12 @@ void addGlitterGoalbox(boolean side) {
 	}
 	else // RIGHT
 	{
-		/*fill_solid(goalRight, SHORTLED, goalCol); // |
-		fill_solid(borderRight+ GOALPOS,GOALBOXLEN , goalCol); //
-		fill_solid(borderRight + LONGLED, SHORTLED, goalCol);
-		fill_solid(borderRight + LONGLED+ SHORTLED, GOALBOXLEN, goalCol);*/
+		if (random8() < chance) {
+			goalRight[random16(SHORTLED)] += CRGB::White;
+		}
+		if (random8() < chance) {
+			borderRight[random16(GOALPOS, (LONGLED + SHORTLED + GOALBOXLEN))] += CRGB::White;
+		}
 	}
 }
 
@@ -221,18 +222,18 @@ void sparkleGoalbox(boolean side) {
 	}
 	else
 	{
-		/*addGlitterGoalbox(RIGHTSIDE);
+		addGlitterGoalbox(RIGHTSIDE);
 		fadeToBlackBy(goalRight, SHORTLED, 10);
 
 		//fade only the goal box
 				//		fadeToBlackBy(borderRight+ GOALPOS, (GOALBOXLEN+ SHORTLED + GOALBOXLEN), 10);
 		//fade everything in this half
-//		fadeToBlackBy(borderRight, NUMLEDBORDER, 10);
+		fadeToBlackBy(borderRight, NUMLEDBORDER, 10);
 		//fade whole field
 				//		fadeToBlackBy(borderLeft, NUMLEDBORDER, 10);
 				//		fadeToBlackBy(borderLeft, NUMLEDBORDER, 10);
 				//		fadeToBlackBy(goalLeft, SHORTLED, 10);
-				*/
+				
 	}
 	
 }
@@ -262,21 +263,21 @@ void heterodyne(boolean side) {
 	}
 	else
 	{
-	//	fadeToBlackBy(borderRight, NUMLEDBORDER, 10);
-	//	fadeToBlackBy(goalRight, SHORTLED, 10);
+		fadeToBlackBy(borderRight, NUMLEDBORDER, 10);
+		fadeToBlackBy(goalRight, SHORTLED, 10);
 
 
-	//	for (int i = 0; i < 8; i++) {
-	//		borderRight[beatsin16(i + 7, 0, LONGLED)] |= CHSV(dothue, 200, 255); // sideline
-	//		fill_solid(goalRight, SHORTLED, borderRight[GOALPOS]); // goalline
-	//		fill_solid(borderRight + LONGLED, SHORTLED, borderRight[LONGLED - 1]); // endfield line
-	//		 
-	//		dothue += 32;
-	//		for (uint16_t i = 0; i < LONGLED; i++)
-	//		{
-	//			borderRight[(NUMLEDBORDER - 1) - i] = borderRight[i];
-	//		}
-	//	}
+		for (int i = 0; i < 8; i++) {
+			borderRight[beatsin16(i + 7, 0, LONGLED)] |= CHSV(dothue, 200, 255); // sideline
+			fill_solid(goalRight, SHORTLED, borderRight[GOALPOS]); // goalline
+			fill_solid(borderRight + LONGLED, SHORTLED, borderRight[LONGLED - 1]); // endfield line
+			 
+			dothue += 32;
+			for (uint16_t i = 0; i < LONGLED; i++)
+			{
+				borderRight[(NUMLEDBORDER - 1) - i] = borderRight[i];
+			}
+		}
 	}
 	
 }
