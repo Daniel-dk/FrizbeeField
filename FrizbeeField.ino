@@ -1,25 +1,44 @@
-#include "FastLED.h"
 
+/*FASTLED LED library : https://github.com/FastLED/FastLED  */
+#include "FastLED.h"
+/* OneButton Button library :  https://github.com/mathertel/OneButton  */
+#include <OneButton.h>
+
+
+/*
+lEFT							RIGHT
+|-----|-----------------------|-----|
+|	  |						  |		|
+|	  |						  |		|
+|-----|-----------------------|-----|
+	  ^			 ^^			  ^
+arrows are the injection points		:		  
+"left goal, left border, right border, right goal "
+*/
 #define LONGLED 60 // Half number of LEDs on the long side of the field 
 #define SHORTLED 30 // number of LEDs in the width of the field ( goal line length )
 
+#define LED_TYPE    WS2812B // use WS2811_400 for teh real field
+#define COLOR_ORDER GRB
+
+#define GOALBOXLEN 5  // how long the "goalbox" is ( number of LEDs )
+
+/*where the LEDs are connected*/
+#define DATA_PIN_1   A0 // left "border"
+#define DATA_PIN_2   A1 // left Goal line
+#define DATA_PIN_3   A2 // Right "border"
+#define DATA_PIN_4   A3 // right goal line
+
+/*buttons*/
+#define GOAL_LEFT_BUTTON  3 // play a goal animation on left side
+#define GOAL_RIGHT_BUTTON   4 // play a goal animation on right side
+#define FIELD_MODE_BUTTON   5 // change teh whole field "look"
+
 #define NUMLEDBORDER (LONGLED+SHORTLED+LONGLED) // number of LEDs on the really long LED strips ( the ~75m ones )
 #define NUMLEDSGOAL (SHORTLED) // number of LEDs on the short strips ( like the 20m goal line )
-#define GOALBOXLEN 5  // how long the "goalbox" is
-
 #define GOALPOS  (LONGLED-GOALBOXLEN) // LED number on teh long strip where the Goal Line is
+
 #define FPS 100 // framerate
-
-#define LEFTSIDE true
-#define RIGHTSIDE false 
-
-#define DATA_PIN_1   A0
-#define DATA_PIN_2   A1
-#define DATA_PIN_3   A2
-#define DATA_PIN_4   A3
-
-#define LED_TYPE    WS2812B //WS2811_400
-#define COLOR_ORDER GRB
 
 #define MAX_IDLE_STATES 6
 #define MAX_IDLE_STATE_IDX MAX_IDLE_STATES-1
@@ -27,18 +46,27 @@
 #define RIGHT_GOAL_STATE LEFT_GOAL_STATE+1
 #define MAX_STATE RIGHT_GOAL_STATE
 
+/*some names so code has easier reading*/
+#define LEFTSIDE true 
+#define RIGHTSIDE false 
+
+/*what animation is currently on the field*/
 uint8_t fieldState = 0;
 uint8_t gHue = 0; // global hue that the field cycles through
-
+uint8_t hueL, hueC, hueR;
 // LED arrays
 CRGB borderLeft[NUMLEDBORDER]; // the long ( 75 m ) piece that goes around the  left side
 CRGB goalLeft[NUMLEDSGOAL]; // shorter ( 20 m ) Goal line on left side
 CRGB borderRight[NUMLEDBORDER];
 CRGB goalRight[NUMLEDSGOAL];
 
+OneButton leftGoal(GOAL_LEFT_BUTTON, true);
+OneButton rightGoal(GOAL_RIGHT_BUTTON, true);
+OneButton modeButton(FIELD_MODE_BUTTON, true);
 
 void setup()
 {
+	/*set LED controllers*/
 	FastLED.addLeds<LED_TYPE, DATA_PIN_1, COLOR_ORDER>(borderLeft, NUMLEDBORDER).setCorrection(TypicalLEDStrip); // long left
 	FastLED.addLeds<LED_TYPE, DATA_PIN_2, COLOR_ORDER>(goalLeft, NUMLEDSGOAL).setCorrection(TypicalLEDStrip); //goal line left
 
@@ -46,17 +74,24 @@ void setup()
 	FastLED.addLeds<LED_TYPE, DATA_PIN_4, COLOR_ORDER>(goalRight, NUMLEDSGOAL).setCorrection(TypicalLEDStrip); // goal line right
 
 // set master brightness control
-	FastLED.setBrightness(32);
-
+	FastLED.setBrightness(255);
 	Serial.begin(115200);
-	halfGradient(true, CHSV(0, 200, 255), CHSV(120, 200, 255)); // left : red to green
+	/*set what happens when a button is pressed*/
+	leftGoal.attachClick(leftGoalClick);
+	rightGoal.attachClick(rightGoalClick);
+	modeButton.attachClick(modeClick);
+	// set the button pins
+	pinMode(GOAL_LEFT_BUTTON, INPUT_PULLUP);
+	pinMode(GOAL_RIGHT_BUTTON, INPUT_PULLUP);
+	pinMode(FIELD_MODE_BUTTON, INPUT_PULLUP);
+
 }
-uint8_t hueL, hueC, hueR;
+
 void loop()
 {
 	/* add main program code here */
 	EVERY_N_MILLISECONDS(20) { gHue++; } // slowly cycle the "base color" through the rainbow
-	EVERY_N_MINUTES(10) { fieldState = random8(MAX_IDLE_STATE_IDX); } // change pattern every few minutes
+	EVERY_N_MINUTES(20) { fieldState = random8(MAX_IDLE_STATE_IDX); } // change pattern every few minutes
 
 	switch (fieldState){
 		case 0 : // rainbow Cycle, whiteish centre out to full colour at goals
@@ -140,6 +175,28 @@ void loop()
 
 	FastLED.show();
 	FastLED.delay(1000 / FPS);
+	/*check buttons*/
+	leftGoal.tick();
+	rightGoal.tick();
+	modeButton.tick();
+}
+
+/*buttons:*/
+/*left goal animation*/
+void leftGoalClick() {
+	fieldState = LEFT_GOAL_STATE;
+
+}
+/*right goal animation*/
+void rightGoalClick() {
+	fieldState = RIGHT_GOAL_STATE;
+}
+/*increment mode*/
+void modeClick() {
+	fieldState++;
+	if (fieldState >= LEFT_GOAL_STATE) {
+		fieldState = 0;
+	}
 }
 
 
