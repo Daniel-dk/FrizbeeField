@@ -15,24 +15,41 @@ lEFT							RIGHT
 arrows are the injection points		:		  
 "left goal, left border, right border, right goal "
 */
+//#define DEBUG
+
+#ifdef DEBUG
 #define LONGLED 60 // Half number of LEDs on the long side of the field 
 #define SHORTLED 30 // number of LEDs in the width of the field ( goal line length )
 
-#define LED_TYPE    WS2812B // use WS2811_400 for teh real field
+#define LED_TYPE    WS2812B // use WS2811_400 for the real field
 #define COLOR_ORDER GRB
 
 #define GOALBOXLEN 5  // how long the "goalbox" is ( number of LEDs )
+#define BRIGHTNESS 32
+#define FIELD_MODE_BUTTON   2 // change teh whole field "look"
+
+#else
+#define LONGLED 74 // Half number of LEDs on the long side of the field 
+#define SHORTLED 56 // number of LEDs in the width of the field ( goal line length )
+
+#define LED_TYPE     WS2811_400
+#define COLOR_ORDER RGB
+
+#define GOALBOXLEN 27  // how long the "goalbox" is ( number of LEDs )
+#define BRIGHTNESS 255
+#define FIELD_MODE_BUTTON   5 // change teh whole field "look"
+
+#endif
 
 /*where the LEDs are connected*/
-#define DATA_PIN_1   A0 // left "border"
+#define DATA_PIN_1   A3 // left "border"
 #define DATA_PIN_2   A1 // left Goal line
 #define DATA_PIN_3   A2 // Right "border"
-#define DATA_PIN_4   A3 // right goal line
+#define DATA_PIN_4   A4 // right goal line
 
 /*buttons*/
 #define GOAL_LEFT_BUTTON  3 // play a goal animation on left side
 #define GOAL_RIGHT_BUTTON   4 // play a goal animation on right side
-#define FIELD_MODE_BUTTON   5 // change teh whole field "look"
 
 #define NUMLEDBORDER (LONGLED+SHORTLED+LONGLED) // number of LEDs on the really long LED strips ( the ~75m ones )
 #define NUMLEDSGOAL (SHORTLED) // number of LEDs on the short strips ( like the 20m goal line )
@@ -51,7 +68,7 @@ arrows are the injection points		:
 #define RIGHTSIDE false 
 
 /*what animation is currently on the field*/
-uint8_t fieldState = 0;
+uint8_t fieldState = 4;
 uint8_t gHue = 0; // global hue that the field cycles through
 uint8_t hueL, hueC, hueR;
 // LED arrays
@@ -74,7 +91,7 @@ void setup()
 	FastLED.addLeds<LED_TYPE, DATA_PIN_4, COLOR_ORDER>(goalRight, NUMLEDSGOAL).setCorrection(TypicalLEDStrip); // goal line right
 
 // set master brightness control
-	FastLED.setBrightness(255);
+	FastLED.setBrightness(BRIGHTNESS);
 	Serial.begin(115200);
 	/*set what happens when a button is pressed*/
 	leftGoal.attachClick(leftGoalClick);
@@ -90,13 +107,13 @@ void setup()
 void loop()
 {
 	/* add main program code here */
-	EVERY_N_MILLISECONDS(20) { gHue++; } // slowly cycle the "base color" through the rainbow
+	EVERY_N_MILLISECONDS(25) { gHue++; } // slowly cycle the "base color" through the rainbow
 	EVERY_N_MINUTES(20) { fieldState = random8(MAX_IDLE_STATE_IDX); } // change pattern every few minutes
 
 	switch (fieldState){
 		case 0 : // rainbow Cycle, whiteish centre out to full colour at goals
-			halfGradient(LEFTSIDE, CHSV(gHue, 50, 255), CHSV(gHue + 50, 200, 255)); // left
-			halfGradient(RIGHTSIDE, CHSV(gHue, 50, 255), CHSV(gHue + 50, 200, 255)); // right
+			halfGradient(LEFTSIDE, CHSV(gHue, 0, 255), CHSV(gHue + 50, 200, 255)); // left
+			halfGradient(RIGHTSIDE, CHSV(gHue, 0, 255), CHSV(gHue + 50, 200, 255)); // right
 			break;
 		case 1: // "bouncy ball things" going up and down each side
 			heterodyne(LEFTSIDE);
@@ -106,14 +123,13 @@ void loop()
 				// random colored speckles that blink in and fade smoothly
 			fadeToBlackBy(borderLeft, NUMLEDBORDER, 10);
 			fadeToBlackBy(goalLeft, NUMLEDSGOAL, 10);
-
-			borderLeft[random16(NUMLEDBORDER)] += CHSV(gHue + random8(64), 200, 255);
-			goalLeft[random16(NUMLEDSGOAL)] += CHSV(gHue + random8(64), 200, 255);
+			borderLeft[random16(NUMLEDBORDER)] += CHSV(gHue + random8(64), beatsin8(1), 255);
+			goalLeft[random16(NUMLEDSGOAL)] += CHSV(gHue + random8(64), beatsin8(1), 255);
 
 			fadeToBlackBy(borderRight, NUMLEDBORDER, 10);
 			fadeToBlackBy(goalRight, NUMLEDSGOAL, 10);
- 		    borderRight[random16(NUMLEDBORDER)] += CHSV(gHue + random8(64), 200, 255);
-			goalRight[random16(NUMLEDSGOAL)] += CHSV(gHue + random8(64), 200, 255);
+ 		    borderRight[random16(NUMLEDBORDER)] += CHSV(gHue + random8(64), beatsin8(1), 255);
+			goalRight[random16(NUMLEDSGOAL)] += CHSV(gHue + random8(64), beatsin8(1), 255);
 
 			break;
 		case 3 :  // white field, coloured goal boxes
@@ -123,16 +139,16 @@ void loop()
 			fill_solid(borderRight, LONGLED, CHSV(gHue, 0, 255));
 			fillGoalbox(RIGHTSIDE, CHSV(gHue+128, 255, 255));
 			break;
-		case 4:  // invisible bouncy ball " shadows of a bouncy ball"
-			pongBounce();
+		case 4:  // sluggish rainbow
+			sluggishRainbow();
 			break;
 
 		case 5:  // one wave over the whole field
 			hueC = gHue;
-			hueL = gHue - 100;
-			hueR =  gHue + 100;
-			halfGradient(LEFTSIDE, CHSV(hueC, 200, sin8(gHue)), CHSV(hueL, 200, 255)); // left
-			halfGradient(RIGHTSIDE, CHSV(hueC, 200, sin8(gHue)), CHSV(hueR, 200, 255)); // right
+			hueL = gHue - 32;
+			hueR =  gHue + 32;
+			halfGradient(LEFTSIDE, CHSV(hueC, 200, beatsin8(1)), CHSV(hueL, 50, beatsin8(2,32))); // left
+			halfGradient(RIGHTSIDE, CHSV(hueC, 200, beatsin8(1)), CHSV(hueR, 50, beatsin8(2,32))); // right
 			break;
 
 		case LEFT_GOAL_STATE: // LEFT GOAL scored
@@ -185,17 +201,61 @@ void loop()
 /*left goal animation*/
 void leftGoalClick() {
 	fieldState = LEFT_GOAL_STATE;
+	Serial.println(F("left goal"));
 
 }
 /*right goal animation*/
 void rightGoalClick() {
 	fieldState = RIGHT_GOAL_STATE;
+	Serial.println(F("Right goal"));
 }
 /*increment mode*/
 void modeClick() {
 	fieldState++;
 	if (fieldState >= LEFT_GOAL_STATE) {
 		fieldState = 0;
+	}
+	Serial.print(F("mode is :"));
+	Serial.println(fieldState);
+}
+
+/*a rainbow fade that does discrete movements between hues*/
+void sluggishRainbow() {
+	static boolean pause = false;
+
+	// fade to a hue
+	// pause
+	
+	if (!pause) {
+		// fade to a hue
+		static uint8_t oldHue;
+		// fade old out
+		CHSV newCol,newColEdge;
+		for (int i = 0; i < 255; i++) {
+			newCol = blend(CHSV(oldHue,200,255), CHSV(gHue,200,255), i);
+			newColEdge = newCol;
+			newCol.sat = 10;
+
+			halfGradient(LEFTSIDE, newCol, newColEdge); // left
+			newColEdge.h += 128;
+			halfGradient(RIGHTSIDE, newCol, newColEdge); // right
+			FastLED.show();
+		}
+		halfGradient(LEFTSIDE, CHSV(gHue, 10, 255), CHSV(gHue, 200, 255)); // left
+		halfGradient(RIGHTSIDE, CHSV(gHue, 10, 255), CHSV(gHue+128, 200, 255)); // // right
+	//	Serial.println(F("Faded"));
+		// fade new in
+		//for (int i = 0; i < 64; i++) {
+		//	halfGradient(LEFTSIDE, CHSV(gHue, 10, i * 4), CHSV(gHue, 200, i * 4)); // left
+		//	halfGradient(RIGHTSIDE, CHSV(gHue, 10, i * 4), CHSV(gHue + 128, 200, i * 4)); // right
+		//	FastLED.show();
+		//}
+		oldHue = gHue;
+			pause = true;
+	}
+	else {
+		EVERY_N_MINUTES(1) { pause = false; }
+		//EVERY_N_SECONDS(20) { pause = false; }
 	}
 }
 
@@ -410,7 +470,7 @@ void fillGoalbox(boolean side, CHSV goalCol) {
 }
 
 
-/*Fill half the field with a gradient*/
+/*glitter in teh goalbox only*/
 void addGlitterGoalbox(boolean side) {
 	uint8_t chance = 80;
 	if (side) // LEFT
@@ -479,7 +539,7 @@ void heterodyne(boolean side) {
 
 
 		for (int i = 0; i < 5; i++) {
-			borderLeft[beatsin16(i + 7, 0, LONGLED)] |= CHSV(dothue+gHue, 200, 255); // sideline
+			borderLeft[beatsin16(i + 4, 0, LONGLED)] |= CHSV(dothue+gHue, 200, 255); // sideline
 			fill_solid(goalLeft, SHORTLED, borderLeft[GOALPOS]); // goalline
 		    fill_solid(borderLeft+LONGLED, SHORTLED, borderLeft[LONGLED-1]); // endfield line
 			
@@ -499,7 +559,7 @@ void heterodyne(boolean side) {
 
 
 		for (int i = 0; i < 8; i++) {
-			borderRight[beatsin16(i + 7, 0, LONGLED)] |= CHSV(dothue, 200, 255); // sideline
+			borderRight[beatsin16(i + 4, 0, LONGLED)] |= CHSV(dothue, 200, 255); // sideline
 			fill_solid(goalRight, SHORTLED, borderRight[GOALPOS]); // goalline
 			fill_solid(borderRight + LONGLED, SHORTLED, borderRight[LONGLED - 1]); // endfield line
 			 
